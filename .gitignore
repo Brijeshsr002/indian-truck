@@ -1,0 +1,10 @@
+# Godot cache and import data (regenerated automatically)
+.godot/
+*.import.tmp
+
+# Builds and test output (the .exe is 100+ MB; GitHub rejects files over 100 MB)
+build/
+*.tmp
+
+# Raw downloads before they are processed into assets/
+assets/incoming/
