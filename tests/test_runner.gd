@@ -62,6 +62,7 @@ func _test_spawn_yard() -> void:
 	check(_upright(t), "spawn: truck upright in yard")
 	check(t.global_position.y > 0.4 and t.global_position.y < 1.3, "spawn: truck rests on ground", "y=%.2f" % t.global_position.y)
 	check(t.speed_kmh < 1.0, "spawn: truck stationary with parking brake", "%.2f km/h" % t.speed_kmh)
+	check(not t.engine_on and t.handbrake_on, "control: new game starts with engine off and parking brake on")
 	var world: CoimbatoreWorld = game.get("world")
 	check(world.streamer.loaded_count() > 0, "world: chunks streamed in near spawn", "%d chunks" % world.streamer.loaded_count())
 	check(world.chunk_specs.size() > 20, "world: chunk plan built", "%d chunks planned" % world.chunk_specs.size())
@@ -78,6 +79,10 @@ func _test_drive_flyover_brakes() -> void:
 	check(t.engine_on, "engine: starts after cranking")
 	check(t.rpm > 500.0 and t.rpm < 1100.0, "engine: idles", "rpm=%.0f" % t.rpm)
 	t.set_handbrake(false)
+	t.set_controls(0.0, 0.0, 0.0)
+	var idle_pos := t.global_position
+	await _frames(180)
+	check(t.global_position.distance_to(idle_pos) < 0.3 and t.speed_kmh < 0.5, "control: no movement without accelerator (engine on, brake off)", "moved %.2f m" % t.global_position.distance_to(idle_pos))
 	var start := t.global_position
 	var fuel0 := t.fuel
 	var max_y := 0.0
@@ -163,8 +168,11 @@ func _test_open_ground() -> void:
 	# parking brake holds
 	t.set_controls(0.0, 0.0, 0.0)
 	t.set_handbrake(true)
+	await _frames(60)
+	var hb_pos := t.global_position
 	await _frames(120)
-	check(t.speed_kmh < 0.5, "parking brake: holds truck", "%.2f km/h" % t.speed_kmh)
+	var hb_moved := Vector2(t.global_position.x - hb_pos.x, t.global_position.z - hb_pos.z).length()
+	check(hb_moved < 0.1, "parking brake: holds truck", "moved %.3f m in 2 s" % hb_moved)
 	# manual gearbox
 	t.auto_transmission = false
 	t.gear = 1
@@ -282,6 +290,14 @@ func _test_settings() -> void:
 	GameConfig.rebind("horn_1", KEY_J)
 	check(GameConfig.rebind("horn_1", KEY_J).is_empty() == false, "settings: key clash detected")
 	GameConfig.reset_keys()
+	var arrows_ok := true
+	for pair in [["accelerate", KEY_UP], ["brake", KEY_DOWN], ["steer_left", KEY_LEFT], ["steer_right", KEY_RIGHT]]:
+		var found := false
+		for ev in InputMap.action_get_events(pair[0]):
+			if ev is InputEventKey and (ev as InputEventKey).physical_keycode == pair[1]:
+				found = true
+		arrows_ok = arrows_ok and found
+	check(arrows_ok, "controls: arrow keys drive as well as W A S D")
 	check(GameConfig.key_name("horn_1") == "H" and GameConfig.key_name("horn_2") == "J" and GameConfig.key_name("horn_3") == "K", "settings: default horn keys H J K")
 	for p in ["low", "medium", "high", "low"]:
 		GameConfig.settings["graphics_preset"] = p

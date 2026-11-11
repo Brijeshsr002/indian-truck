@@ -22,6 +22,7 @@ const FUEL_CAPACITY := 400.0
 const BRAKE_PER_WHEEL := 160.0
 const HANDBRAKE_PER_WHEEL := 420.0
 const ENGINE_BRAKE_PER_WHEEL := 12.0
+const HOLD_BRAKE_PER_WHEEL := 60.0
 const MAX_STEER_LOW := 0.55
 const MAX_STEER_HIGH := 0.12
 const STEER_RATE := 0.9
@@ -292,8 +293,12 @@ func _apply_drive() -> void:
 	var per_wheel := force / float(drive_wheels.size())
 	var coasting := engine_on and gear > 0 and throttle_input < 0.01 and speed_kmh > 4.0
 	var service := brake_input * BRAKE_PER_WHEEL
+	# Hold brake: the truck never creeps unless the driver presses the accelerator.
+	var hold := throttle_input < 0.01 and speed_kmh < 2.0
 	for w in all_wheels:
 		var wb := service
+		if hold:
+			wb = maxf(wb, HOLD_BRAKE_PER_WHEEL)
 		if coasting and w.use_as_traction:
 			wb = maxf(wb, ENGINE_BRAKE_PER_WHEEL)
 		if handbrake_on and not w.use_as_steering:

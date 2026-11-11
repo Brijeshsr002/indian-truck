@@ -76,6 +76,11 @@ const DEFAULT_KEYS := {
 	"quick_load": KEY_F9, "pause": KEY_ESCAPE,
 }
 
+## Arrow keys always work as a second set of driving / walking keys.
+const SECONDARY_KEYS := {
+	"accelerate": KEY_UP, "brake": KEY_DOWN, "steer_left": KEY_LEFT, "steer_right": KEY_RIGHT,
+}
+
 ## Gamepad defaults (XInput layout). A steering wheel shows up as a joypad: its
 ## wheel axis usually maps to left stick X and pedals to the triggers.
 const DEFAULT_JOY_AXES := {
@@ -189,6 +194,10 @@ func _apply_action_keys(action: String) -> void:
 	var key := InputEventKey.new()
 	key.physical_keycode = key_bindings[action]
 	InputMap.action_add_event(action, key)
+	if SECONDARY_KEYS.has(action) and int(SECONDARY_KEYS[action]) != int(key_bindings[action]):
+		var alt := InputEventKey.new()
+		alt.physical_keycode = SECONDARY_KEYS[action]
+		InputMap.action_add_event(action, alt)
 
 
 ## Rebinds an action to a key. Returns the other actions already using that key.
@@ -224,6 +233,7 @@ func controls_text() -> String:
 	var lines := PackedStringArray()
 	for action in ACTION_ORDER:
 		lines.append("%-6s  %s" % [key_name(action), ACTION_LABELS[action]])
+	lines.append("Arrows  Also accelerate, brake and steer (Up, Down, Left, Right)")
 	lines.append("Mouse   Look around (click the game window to capture the mouse)")
 	return "\n".join(lines)
 
