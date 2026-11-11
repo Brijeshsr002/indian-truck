@@ -62,11 +62,11 @@ func setup(g: Node) -> void:
 	prompt_label = _label(22)
 	prompt_label.anchor_left = 0.5
 	prompt_label.anchor_right = 0.5
-	prompt_label.anchor_top = 1.0
-	prompt_label.anchor_bottom = 1.0
+	prompt_label.anchor_top = 0.0
+	prompt_label.anchor_bottom = 0.0
 	prompt_label.offset_left = -300
 	prompt_label.offset_right = 300
-	prompt_label.offset_top = -300
+	prompt_label.offset_top = 150
 	prompt_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	prompt_label.add_theme_color_override("font_color", Color(1.0, 0.8, 0.35))
 	root.add_child(prompt_label)

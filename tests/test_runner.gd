@@ -50,6 +50,7 @@ func _run() -> void:
 	await _test_drive_flyover_brakes()
 	await _test_open_ground()
 	await _test_camera_keys()
+	await _test_dashboard_photo()
 	_test_settings()
 	print("----")
 	print("RESULT: %d passed, %d failed, %.1f s" % [passes, failures, (Time.get_ticks_msec() - t0) / 1000.0])
@@ -311,6 +312,34 @@ func _press(keycode: int) -> void:
 		Input.parse_input_event(ev)
 		await get_tree().process_frame
 		await get_tree().process_frame
+
+
+func _test_dashboard_photo() -> void:
+	var t: Truck = game.get("truck")
+	check(t.photo != null and t.photo.get_parent() == t, "cabin photo: framed photo attached to the truck")
+	# import a tall test image and check the frame keeps its aspect ratio
+	var img := Image.create(300, 600, false, Image.FORMAT_RGB8)
+	img.fill(Color(0.8, 0.4, 0.1))
+	var src := "user://test_photo_src.png"
+	img.save_png(src)
+	var err := DashboardPhoto.import_photo(src)
+	check(err == "", "cabin photo: player photo imports", err)
+	t.photo.rebuild()
+	await _frames(2)
+	check(t.photo.source == "player photo" and t.photo.image_size == Vector2i(300, 600), "cabin photo: player photo shown at its real size", "%s %s" % [t.photo.source, str(t.photo.image_size)])
+	var quad := (t.photo.get_child(0) as MeshInstance3D).mesh as QuadMesh
+	check(is_equal_approx(quad.size.x / quad.size.y, 0.5), "cabin photo: aspect ratio preserved", "%.2f" % (quad.size.x / quad.size.y))
+	var bad := DashboardPhoto.import_photo("user://does_not_exist.png")
+	check(bad != "", "cabin photo: missing file gives a clear error", bad)
+	GameConfig.settings["cabin_photo_slot"] = "passenger_side"
+	t.photo.rebuild()
+	check(t.photo.position.is_equal_approx(DashboardPhoto.SLOTS["passenger_side"]), "cabin photo: position can be changed")
+	GameConfig.settings["cabin_photo_slot"] = "centre"
+	t.photo.rebuild()
+	DashboardPhoto.clear_photo()
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(src))
+	var default_exists := ResourceLoader.exists(DashboardPhoto.DEFAULT_IMAGE)
+	print("INFO  cabin photo: built-in default image present = %s" % default_exists)
 
 
 func _test_settings() -> void:

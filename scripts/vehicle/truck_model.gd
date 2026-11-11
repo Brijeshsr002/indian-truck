@@ -98,7 +98,7 @@ static func build(truck: Node3D) -> Dictionary:
 	var tassel_cols := [Color(0.85, 0.1, 0.1), CAB_STRIPE, GREEN, Color(0.15, 0.3, 0.8)]
 	for i in range(14):
 		_box(b, Vector3(-1.04 + i * 0.16, 2.37, 4.72), Vector3(0.1, 0.12, 0.02), tassel_cols[i % 4])
-	_build_vel(b, Vector3(0.3, 1.53, 4.48))
+	# The dashboard Vel now comes with the framed photo (DashboardPhoto).
 	var body_mi := MeshInstance3D.new()
 	body_mi.name = "Body"
 	body_mi.mesh = b.commit()

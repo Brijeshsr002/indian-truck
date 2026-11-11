@@ -8,6 +8,9 @@ signal closed
 const PRESET_KEYS := ["low", "medium", "high"]
 const FPS_VALUES := [-1, 30, 60, 0]
 
+const FUEL_RATES := [0.25, 0.5, 1.0]
+
+var _file_dialog: FileDialog
 var _waiting_action := ""
 var _key_buttons := {}
 var _status: Label
@@ -73,6 +76,50 @@ func _ready() -> void:
 	comb.toggled.connect(func(on: bool): GameConfig.set_setting("combined_horn", on))
 	_row(list, "Combined horn (Horn 1 plays all three)", comb)
 
+	var fuel_opt := OptionButton.new()
+	for t in ["Very low (25%)", "Low (50%, default)", "Realistic (100%)"]:
+		fuel_opt.add_item(t)
+	fuel_opt.select(maxi(0, FUEL_RATES.find(float(GameConfig.settings["fuel_rate"]))))
+	fuel_opt.item_selected.connect(func(i: int): GameConfig.set_setting("fuel_rate", FUEL_RATES[i]))
+	_row(list, "Diesel use", fuel_opt)
+
+	_section(list, "Cabin - Lord Murugan photo")
+	var choose := Button.new()
+	choose.text = "Choose my own photo..."
+	choose.pressed.connect(_choose_photo)
+	_row(list, "Photo on the dashboard", choose)
+	var reset_photo := Button.new()
+	reset_photo.text = "Use the built-in photo"
+	reset_photo.pressed.connect(func(): DashboardPhoto.clear_photo(); _bump_photo(); _say("Using the built-in photo."))
+	_row(list, "", reset_photo)
+	var slot_opt := OptionButton.new()
+	var slot_keys: Array = DashboardPhoto.SLOTS.keys()
+	for k in slot_keys:
+		slot_opt.add_item(DashboardPhoto.SLOT_LABELS[k])
+	slot_opt.select(maxi(0, slot_keys.find(GameConfig.settings["cabin_photo_slot"])))
+	slot_opt.item_selected.connect(func(i: int): GameConfig.set_setting("cabin_photo_slot", slot_keys[i]))
+	_row(list, "Position", slot_opt)
+	var frame_opt := OptionButton.new()
+	var frame_keys: Array = DashboardPhoto.FRAMES.keys()
+	for k in frame_keys:
+		frame_opt.add_item(String(k).capitalize())
+	frame_opt.select(maxi(0, frame_keys.find(GameConfig.settings["cabin_photo_frame"])))
+	frame_opt.item_selected.connect(func(i: int): GameConfig.set_setting("cabin_photo_frame", frame_keys[i]))
+	_row(list, "Frame", frame_opt)
+	var extras := CheckBox.new()
+	extras.button_pressed = bool(GameConfig.settings["cabin_photo_extras"])
+	extras.toggled.connect(func(on: bool): GameConfig.set_setting("cabin_photo_extras", on))
+	_row(list, "Vel and flowers beside the photo", extras)
+	_file_dialog = FileDialog.new()
+	_file_dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
+	_file_dialog.access = FileDialog.ACCESS_FILESYSTEM
+	_file_dialog.use_native_dialog = true
+	_file_dialog.filters = PackedStringArray(["*.png, *.jpg, *.jpeg, *.webp ; Images"])
+	_file_dialog.title = "Choose a Lord Murugan photo"
+	_file_dialog.process_mode = Node.PROCESS_MODE_ALWAYS
+	_file_dialog.file_selected.connect(_on_photo_selected)
+	add_child(_file_dialog)
+
 	_section(list, "Key bindings  (click a key, then press the new key; Esc cancels)")
 	for action in GameConfig.ACTION_ORDER:
 		var btn := Button.new()
@@ -123,6 +170,23 @@ func _slider(parent: Control, text: String, key: String, lo: float, hi: float) -
 	s.value = float(GameConfig.settings[key])
 	s.value_changed.connect(func(v: float): GameConfig.set_setting(key, v))
 	_row(parent, text, s)
+
+
+func _choose_photo() -> void:
+	_file_dialog.popup_centered_ratio(0.7)
+
+
+func _on_photo_selected(path: String) -> void:
+	var err := DashboardPhoto.import_photo(path)
+	if err != "":
+		_say(err)
+		return
+	_bump_photo()
+	_say("Photo added to the dashboard. It stays saved even if you move the original file.")
+
+
+func _bump_photo() -> void:
+	GameConfig.set_setting("cabin_photo_version", int(GameConfig.settings.get("cabin_photo_version", 0)) + 1)
 
 
 func _refresh_keys() -> void:

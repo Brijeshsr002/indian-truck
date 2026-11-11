@@ -34,4 +34,5 @@ CC0 means no attribution is required; we credit Poly Haven anyway.
 
 | Asset | Source | Author | Licence |
 |---|---|---|---|
-| (none yet) | | | |
+| Lord Murugan painting (cabin photo) | Wikimedia Commons | Raja Ravi Varma | Public domain |
+| Truck horn recording (not yet in game) | BigSoundBank #2721 | Pierre Sibanarco | CC0 |

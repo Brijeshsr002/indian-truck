@@ -57,6 +57,7 @@ var horn: HornController
 var engine_audio: EngineAudio
 var cockpit_anchor: Node3D
 var steering_spinner: Node3D
+var photo: DashboardPhoto
 
 var _driven_rpm := 0.0
 var _shift_timer := 0.0
@@ -91,6 +92,9 @@ func _ready() -> void:
 	cockpit_anchor.name = "CockpitEye"
 	cockpit_anchor.position = COCKPIT_EYE
 	add_child(cockpit_anchor)
+	photo = DashboardPhoto.new()
+	add_child(photo)
+	GameConfig.settings_changed.connect(photo.rebuild)
 	_update_light_visuals()
 
 
@@ -244,7 +248,8 @@ func _update_engine(delta: float) -> void:
 	else:
 		target = _driven_rpm
 	rpm = lerpf(rpm, clampf(target, IDLE_RPM * 0.95, MAX_RPM), clampf(8.0 * delta, 0.0, 1.0))
-	var litres_per_hour := 2.2 + 38.0 * throttle_input * (rpm / 2000.0)
+	var fuel_rate := float(GameConfig.settings.get("fuel_rate", 0.5))
+	var litres_per_hour := (2.2 + 38.0 * throttle_input * (rpm / 2000.0)) * fuel_rate
 	var used := litres_per_hour / 3600.0 * delta
 	fuel = maxf(0.0, fuel - used)
 	fuel_used_l += used

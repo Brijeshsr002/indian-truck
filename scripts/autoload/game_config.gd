@@ -111,6 +111,12 @@ var settings := {
 	"mouse_sensitivity": 0.25,
 	"auto_transmission": true,
 	"combined_horn": false,
+	# 1.0 = realistic diesel use; default is half, as requested.
+	"fuel_rate": 0.5,
+	"cabin_photo_slot": "centre",
+	"cabin_photo_frame": "gold",
+	"cabin_photo_extras": true,
+	"cabin_photo_version": 0,
 }
 var key_bindings := {}
 
