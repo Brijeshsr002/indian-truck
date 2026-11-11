@@ -49,6 +49,7 @@ func _run() -> void:
 	await _test_spawn_yard()
 	await _test_drive_flyover_brakes()
 	await _test_open_ground()
+	await _test_camera_keys()
 	_test_settings()
 	print("----")
 	print("RESULT: %d passed, %d failed, %.1f s" % [passes, failures, (Time.get_ticks_msec() - t0) / 1000.0])
@@ -278,6 +279,38 @@ func _test_open_ground() -> void:
 	check(not still_near, "streaming: frees distant chunks")
 	world.streamer.target = t
 	far.queue_free()
+
+
+## Presses real keys through Godot's input system, exactly like a player.
+func _test_camera_keys() -> void:
+	var rig: CameraRig = game.get("rig")
+	game.set("external_control", false)
+	var expected := {KEY_1: CameraRig.Mode.COCKPIT, KEY_2: CameraRig.Mode.CHASE, KEY_3: CameraRig.Mode.BUMPER, KEY_4: CameraRig.Mode.TOP}
+	for key in expected.keys():
+		await _press(key)
+		check(rig.mode == expected[key], "camera key %s: %s" % [OS.get_keycode_string(key), rig.camera_name()])
+	var seen := {}
+	for i in range(4):
+		await _press(KEY_C)
+		seen[rig.mode] = true
+	check(seen.size() == 4, "camera key C: cycles through all four cameras", "%d distinct" % seen.size())
+	await _press(KEY_2)
+	await _frames(5)
+	var cam_pos := rig.camera.global_position
+	var t: Truck = game.get("truck")
+	check(cam_pos.distance_to(t.global_position) > 5.0, "camera 2: chase camera sits behind/above the truck", "%.1f m away" % cam_pos.distance_to(t.global_position))
+	game.set("external_control", true)
+
+
+func _press(keycode: int) -> void:
+	for pressed in [true, false]:
+		var ev := InputEventKey.new()
+		ev.physical_keycode = keycode
+		ev.keycode = keycode
+		ev.pressed = pressed
+		Input.parse_input_event(ev)
+		await get_tree().process_frame
+		await get_tree().process_frame
 
 
 func _test_settings() -> void:

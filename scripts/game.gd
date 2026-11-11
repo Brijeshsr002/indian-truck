@@ -80,6 +80,10 @@ func _ready() -> void:
 		match String(_cli["cam"]):
 			"cockpit":
 				rig.set_mode(CameraRig.Mode.COCKPIT)
+			"bumper":
+				rig.set_mode(CameraRig.Mode.BUMPER)
+			"top":
+				rig.set_mode(CameraRig.Mode.TOP)
 			"foot":
 				exit_truck()
 	if _cli.has("autodrive"):
@@ -275,7 +279,14 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if event.is_action_pressed("camera"):
 		rig.cycle_truck_camera()
-	elif event.is_action_pressed("engine"):
+		hud.notify(rig.camera_name(), 1.5)
+		return
+	for i in range(4):
+		if event.is_action_pressed("camera_%d" % (i + 1)):
+			rig.set_truck_camera(i)
+			hud.notify(rig.camera_name(), 1.5)
+			return
+	if event.is_action_pressed("engine"):
 		truck.toggle_engine()
 	elif event.is_action_pressed("headlights"):
 		truck.toggle_headlights()

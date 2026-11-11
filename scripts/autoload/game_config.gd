@@ -34,7 +34,8 @@ const PRESETS := {
 
 const ACTION_ORDER := [
 	"accelerate", "brake", "steer_left", "steer_right", "reverse", "engine",
-	"horn_1", "horn_2", "horn_3", "headlights", "handbrake", "camera", "map",
+	"horn_1", "horn_2", "horn_3", "headlights", "handbrake", "camera",
+	"camera_1", "camera_2", "camera_3", "camera_4", "map",
 	"interact", "run", "gear_up", "gear_down", "transmission_mode",
 	"indicator_left", "indicator_right", "help", "quick_save", "quick_load", "pause",
 ]
@@ -51,7 +52,11 @@ const ACTION_LABELS := {
 	"horn_3": "Horn 3 - special multi-tone",
 	"headlights": "Headlights",
 	"handbrake": "Parking brake (toggle)",
-	"camera": "Change camera",
+	"camera": "Next camera",
+	"camera_1": "Camera 1 - driver seat",
+	"camera_2": "Camera 2 - chase",
+	"camera_3": "Camera 3 - bumper",
+	"camera_4": "Camera 4 - top view",
 	"map": "World map",
 	"interact": "Get in / get out of truck",
 	"run": "Run (on foot)",
@@ -70,6 +75,7 @@ const DEFAULT_KEYS := {
 	"accelerate": KEY_W, "brake": KEY_S, "steer_left": KEY_A, "steer_right": KEY_D,
 	"reverse": KEY_R, "engine": KEY_E, "horn_1": KEY_H, "horn_2": KEY_J, "horn_3": KEY_K,
 	"headlights": KEY_L, "handbrake": KEY_SPACE, "camera": KEY_C, "map": KEY_M,
+	"camera_1": KEY_1, "camera_2": KEY_2, "camera_3": KEY_3, "camera_4": KEY_4,
 	"interact": KEY_F, "run": KEY_SHIFT, "gear_up": KEY_SHIFT, "gear_down": KEY_CTRL,
 	"transmission_mode": KEY_T, "indicator_left": KEY_BRACKETLEFT,
 	"indicator_right": KEY_BRACKETRIGHT, "help": KEY_F1, "quick_save": KEY_F5,
