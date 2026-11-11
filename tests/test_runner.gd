@@ -12,6 +12,8 @@ var failures := 0
 
 func _ready() -> void:
 	GameConfig.test_mode = true
+	# Never touch the player's real dashboard photo.
+	DashboardPhoto.user_image_path = "user://test_cabin_photo.png"
 	call_deferred("_run")
 
 
@@ -51,6 +53,7 @@ func _run() -> void:
 	await _test_open_ground()
 	await _test_camera_keys()
 	await _test_dashboard_photo()
+	await _test_phase1_fixes()
 	_test_settings()
 	print("----")
 	print("RESULT: %d passed, %d failed, %.1f s" % [passes, failures, (Time.get_ticks_msec() - t0) / 1000.0])
@@ -340,6 +343,105 @@ func _test_dashboard_photo() -> void:
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(src))
 	var default_exists := ResourceLoader.exists(DashboardPhoto.DEFAULT_IMAGE)
 	print("INFO  cabin photo: built-in default image present = %s" % default_exists)
+
+
+func _test_phase1_fixes() -> void:
+	var t: Truck = game.get("truck")
+	var rig: CameraRig = game.get("rig")
+	# B9: the real photo path is untouched by tests
+	check(DashboardPhoto.user_image_path != DashboardPhoto.USER_IMAGE, "B9: tests use a scratch photo path")
+	# B3: gearbox follows the setting during a drive
+	GameConfig.settings["auto_transmission"] = false
+	game.call("_apply_settings")
+	check(not t.auto_transmission, "B3: unticking Automatic gearbox switches to manual mid-drive")
+	GameConfig.settings["auto_transmission"] = true
+	game.call("_apply_settings")
+	check(t.auto_transmission, "B3: ticking it switches back to automatic")
+	# B4: refuel at the pump and emergency diesel elsewhere
+	t.engine_on = false
+	t.fuel = 0.0
+	var added: float = game.call("try_refuel")
+	check(added > 30.0 and t.fuel > 30.0, "B4: emergency diesel when the tank is empty", "+%.0f L" % added)
+	t.global_transform = Transform3D(Basis(Vector3.UP, PI), Vector3(154, 1.0, 32))  # pump lane between dispensers
+	t.linear_velocity = Vector3.ZERO
+	await _frames(60)
+	t.fuel = 50.0
+	check(game.call("at_fuel_pump"), "B4: truck detected at the Kovai Fuels pumps")
+	added = game.call("try_refuel")
+	check(is_equal_approx(t.fuel, Truck.FUEL_CAPACITY), "B4: tank filled at the pump", "+%.0f L" % added)
+	# B8: on-foot camera faces the way the truck faces after leaving cockpit view
+	rig.set_truck_camera(0)
+	await _frames(5)
+	check(game.call("exit_truck"), "B7: exit finds a clear spot at the pumps")
+	var z := t.global_transform.basis.z
+	var cam_fwd := rig.forward_flat()
+	check(cam_fwd.dot(Vector3(z.x, 0, z.z).normalized()) > 0.7, "B8: on-foot camera faces the truck's direction after cockpit view", "dot=%.2f" % cam_fwd.dot(Vector3(z.x, 0, z.z).normalized()))
+	var driver: Driver = game.get("driver")
+	driver.global_position = t.global_transform * Truck.DOOR_RIGHT_LOCAL
+	await _frames(5)
+	game.call("try_enter_truck")
+	# B7: a truck parked against a tall building must not put the driver inside it
+	var world: CoimbatoreWorld = game.get("world")
+	var wall := StaticBody3D.new()
+	wall.collision_layer = 1
+	MeshKit.col_box(wall, Transform3D(Basis(), Vector3(0, 6, 0)), Vector3(4, 12, 20))
+	world.add_child(wall)
+	var tx := t.global_transform
+	wall.global_position = tx * Vector3(-3.4, 0, 3.7) - Vector3(0, tx.origin.y, 0)
+	await _frames(3)
+	var spot: Variant = game.call("_find_exit_spot")
+	var right_door: Vector3 = tx * Truck.DOOR_RIGHT_LOCAL
+	var blocked_side_used: bool = spot != null and Vector2((spot as Vector3).x - right_door.x, (spot as Vector3).z - right_door.z).length() < 1.0
+	check(not blocked_side_used, "B7: exit refuses the door side blocked by a 12 m building")
+	wall.queue_free()
+	# B5: crash-safe save keeps a backup and recovers it
+	var path := "user://test_safe.json"
+	SaveSystem.save_data({"truck": {"fuel": 1.0}}, path)
+	SaveSystem.save_data({"truck": {"fuel": 2.0}}, path)
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path + ".bak"))
+	DirAccess.rename_absolute(ProjectSettings.globalize_path(path), ProjectSettings.globalize_path(path + ".bak"))
+	var rec: Dictionary = SaveSystem.load_data(path)
+	check(rec["ok"] and float(rec["data"]["truck"]["fuel"]) == 2.0, "B5: interrupted save recovered from the backup")
+	# Review fix: a damaged main save falls back to the good backup
+	SaveSystem.save_data({"truck": {"fuel": 3.0}}, path)
+	SaveSystem.save_data({"truck": {"fuel": 4.0}}, path)
+	var bf := FileAccess.open(path, FileAccess.WRITE)
+	bf.store_string("{ damaged")
+	bf.close()
+	var rec2: Dictionary = SaveSystem.load_data(path)
+	check(rec2["ok"] and rec2.has("warning") and float(rec2["data"]["truck"]["fuel"]) == 3.0, "B5: damaged save falls back to the previous good save")
+	for suffix in ["", ".bak", ".tmp", ".corrupt"]:
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(path + suffix))
+	# Review fix: refuelling a full tank says so instead of "added 0 litres"
+	t.global_transform = Transform3D(Basis(Vector3.UP, PI), Vector3(154, 1.0, 32))
+	t.linear_velocity = Vector3.ZERO
+	t.engine_on = false
+	await _frames(30)
+	t.fuel = Truck.FUEL_CAPACITY
+	check(is_zero_approx(float(game.call("try_refuel"))), "B4: full tank is not refilled")
+	# Review fix (regression): getting out under the Avinashi Road flyover deck
+	t.global_transform = Transform3D(Basis(), Vector3(-250, 1.1, 1.5))
+	t.linear_velocity = Vector3.ZERO
+	await _frames(90)
+	check(t.global_position.y < 1.5, "flyover: truck parked on the cross road under the deck", "y=%.2f" % t.global_position.y)
+	check(game.call("exit_truck"), "B7: can get out under the flyover deck")
+	var drv: Driver = game.get("driver")
+	drv.global_position = t.global_transform * Truck.DOOR_RIGHT_LOCAL
+	await _frames(5)
+	game.call("try_enter_truck")
+	# B10: zebra crossings drawn on every junction arm
+	var world2: CoimbatoreWorld = game.get("world")
+	check(world2.zebra_count >= world2.junctions.size(), "B10: zebra crossings on junction arms", "%d crossings at %d junctions" % [world2.zebra_count, world2.junctions.size()])
+	# Review fix: settings checkbox follows changes made elsewhere (T key path)
+	var menu := SettingsMenu.new()
+	add_child(menu)
+	await _frames(2)
+	GameConfig.set_setting("auto_transmission", false)
+	var cb: CheckBox = menu.get("_toggles")["auto_transmission"]
+	check(not cb.button_pressed, "B3: settings checkbox updates when the gearbox mode changes elsewhere")
+	GameConfig.set_setting("auto_transmission", true)
+	check(cb.button_pressed, "B3: and back")
+	menu.queue_free()
 
 
 func _test_settings() -> void:

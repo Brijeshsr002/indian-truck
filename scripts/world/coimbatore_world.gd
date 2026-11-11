@@ -49,6 +49,7 @@ var _rng := RandomNumberGenerator.new()
 var _tree_density := 0.45
 var _tree_meshes := {}
 var label_range := 70.0
+var zebra_count := 0
 
 
 func _ready() -> void:
@@ -91,7 +92,13 @@ func _process(delta: float) -> void:
 	_set_sig("B_red", not (b_green or b_amber))
 
 
+var _sig_state := {}
+
+
 func _set_sig(key: String, on: bool) -> void:
+	if _sig_state.get(key) == on:
+		return
+	_sig_state[key] = on
 	if signal_mats.has(key):
 		(signal_mats[key] as StandardMaterial3D).emission_energy_multiplier = 3.0 if on else 0.05
 
@@ -303,13 +310,31 @@ func _build_roads() -> void:
 			_line(b, r, -w2 * 0.25, 3.0, 9.0, 0.13, WHITE, gaps)
 		else:
 			_line(b, r, 0.0, 3.0, 9.0, 0.13, WHITE, gaps)
-	# zebra crossings near the big junctions
-	for jn in junctions:
-		var jp2: Vector2 = jn[0]
-		var off: float = float(jn[1]) * 0.5 + 3.0
-		for k in range(8):
-			var x := jp2.x - off - 1.0
-			b.add_flat(Vector3(x, ROAD_Y + 0.012, jp2.y - 6.0 + k * 1.6), 3.0, 0.7, WHITE)
+	# zebra crossings on every road arm leaving a junction (and only where a road exists)
+	zebra_count = 0
+	for r in roads:
+		var ra: Vector2 = r["a"]
+		var re: Vector2 = r["b"]
+		var rw: float = r["w"]
+		var length := ra.distance_to(re)
+		var dir := (re - ra) / length
+		var nrm := Vector2(-dir.y, dir.x)
+		var yaw := atan2(-dir.y, dir.x)
+		for jn in junctions:
+			var jp2: Vector2 = jn[0]
+			if dist_to_segment(jp2, ra, re) > 1.0:
+				continue
+			var tj := (jp2 - ra).dot(dir)
+			for s: float in [-1.0, 1.0]:
+				var tc := tj + s * (float(jn[1]) * 0.5 + 3.0)
+				if tc < 2.0 or tc > length - 2.0:
+					continue  # no road on this side of the junction
+				var stripes := int(rw / 1.4)
+				for k in range(stripes):
+					var off := -rw * 0.5 + 0.7 + k * 1.4
+					var c := ra + dir * tc + nrm * off
+					b.add_flat(Vector3(c.x, ROAD_Y + 0.012, c.y), 3.0, 0.7, WHITE, yaw)
+				zebra_count += 1
 	var mi := MeshKit.mesh_instance(self, b.commit())
 	mi.name = "Roads"
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF

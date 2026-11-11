@@ -11,6 +11,8 @@ const FPS_VALUES := [-1, 30, 60, 0]
 const FUEL_RATES := [0.25, 0.5, 1.0]
 
 var _file_dialog: FileDialog
+var _toggles := {}
+var _dragging := {}
 var _waiting_action := ""
 var _key_buttons := {}
 var _status: Label
@@ -70,11 +72,14 @@ func _ready() -> void:
 	var auto := CheckBox.new()
 	auto.button_pressed = bool(GameConfig.settings["auto_transmission"])
 	auto.toggled.connect(func(on: bool): GameConfig.set_setting("auto_transmission", on))
+	_toggles["auto_transmission"] = auto
 	_row(list, "Automatic gearbox", auto)
 	var comb := CheckBox.new()
 	comb.button_pressed = bool(GameConfig.settings["combined_horn"])
 	comb.toggled.connect(func(on: bool): GameConfig.set_setting("combined_horn", on))
+	_toggles["combined_horn"] = comb
 	_row(list, "Combined horn (Horn 1 plays all three)", comb)
+	GameConfig.settings_changed.connect(_sync_toggles)
 
 	var fuel_opt := OptionButton.new()
 	for t in ["Very low (25%)", "Low (50%, default)", "Realistic (100%)"]:
@@ -168,8 +173,20 @@ func _slider(parent: Control, text: String, key: String, lo: float, hi: float) -
 	s.step = 0.01
 	s.custom_minimum_size = Vector2(220, 24)
 	s.value = float(GameConfig.settings[key])
-	s.value_changed.connect(func(v: float): GameConfig.set_setting(key, v))
+	# While dragging with the mouse, apply live but save once at the end. Wheel,
+	# keyboard and gamepad changes have no drag, so they are saved immediately.
+	s.drag_started.connect(func(): _dragging[key] = true)
+	s.drag_ended.connect(func(_changed: bool): _dragging[key] = false; GameConfig.save_settings())
+	s.value_changed.connect(func(v: float): GameConfig.set_setting(key, v, not _dragging.get(key, false)))
 	_row(parent, text, s)
+
+
+## Keeps checkboxes in step with settings changed elsewhere (for example the T key).
+func _sync_toggles() -> void:
+	for key in _toggles.keys():
+		var cb: CheckBox = _toggles[key]
+		if is_instance_valid(cb):
+			cb.set_pressed_no_signal(bool(GameConfig.settings.get(key, false)))
 
 
 func _choose_photo() -> void:

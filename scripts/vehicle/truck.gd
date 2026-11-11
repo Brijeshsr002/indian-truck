@@ -70,6 +70,7 @@ var _sfx: AudioStreamPlayer3D
 var _cab_sfx: AudioStreamPlayer3D
 var _mats := {}
 var _headlights: Array[SpotLight3D] = []
+var _lamp_key: Array = []
 
 
 func _ready() -> void:
@@ -94,7 +95,7 @@ func _ready() -> void:
 	add_child(cockpit_anchor)
 	photo = DashboardPhoto.new()
 	add_child(photo)
-	GameConfig.settings_changed.connect(photo.rebuild)
+	GameConfig.cabin_photo_changed.connect(photo.rebuild)
 	_update_light_visuals()
 
 
@@ -356,6 +357,11 @@ func _update_blinkers(delta: float) -> void:
 func _update_light_visuals() -> void:
 	if _mats.is_empty():
 		return
+	# Only touch the materials when a lamp actually changes state.
+	var key := [brake_input > 0.05, gear < 0, headlights_on, _blink_on, indicator]
+	if key == _lamp_key:
+		return
+	_lamp_key = key
 	var tail := 0.5 if headlights_on else 0.0
 	(_mats["brake"] as StandardMaterial3D).emission_energy_multiplier = 3.0 if brake_input > 0.05 else tail
 	(_mats["reverse"] as StandardMaterial3D).emission_energy_multiplier = 2.5 if gear < 0 else 0.0
@@ -501,7 +507,6 @@ func apply_state(d: Dictionary) -> void:
 	rpm = IDLE_RPM if engine_on else 0.0
 	fuel = clampf(float(d.get("fuel", 300.0)), 0.0, FUEL_CAPACITY)
 	gear = clampi(int(d.get("gear", 1)), -1, GEARS.size())
-	auto_transmission = bool(d.get("auto", true))
 	handbrake_on = bool(d.get("handbrake", true))
 	odometer_km = float(d.get("odometer", 0.0))
 	fuel_used_l = float(d.get("fuel_used", 0.0))

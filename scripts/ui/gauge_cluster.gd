@@ -19,7 +19,14 @@ func _ready() -> void:
 	_bg.set_corner_radius_all(14)
 
 
-func _process(_d: float) -> void:
+var _redraw_t := 0.0
+
+
+func _process(delta: float) -> void:
+	_redraw_t -= delta
+	if _redraw_t > 0.0:
+		return
+	_redraw_t = 1.0 / 15.0  # 15 redraws per second is plenty for gauges and maps
 	if visible:
 		queue_redraw()
 

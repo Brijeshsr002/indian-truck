@@ -59,11 +59,15 @@ func setup(t: Truck, d: Driver) -> void:
 
 
 func set_mode(m: int) -> void:
+	var previous := mode
 	mode = m
 	if m != Mode.ON_FOOT:
 		last_truck_mode = m
 	if m == Mode.ON_FOOT:
-		yaw = _chase_heading + PI + chase_yaw_offset
+		# Look the way the truck faces. The chase offset only applies if we came
+		# from the chase camera (its heading is not tracked in other modes).
+		var offset := chase_yaw_offset if previous == Mode.CHASE else 0.0
+		yaw = _heading_of(truck) + PI + offset
 		pitch = -0.2
 	if m == Mode.CHASE or m == Mode.TOP:
 		_chase_heading = _heading_of(truck)

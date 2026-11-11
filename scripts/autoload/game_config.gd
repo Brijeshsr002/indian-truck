@@ -3,6 +3,8 @@ extends Node
 ## Gameplay systems read from here; changing a preset never changes gameplay.
 
 signal settings_changed
+## Emitted only when a cabin_photo_* setting changes (rebuilding the photo is costly).
+signal cabin_photo_changed
 
 const SETTINGS_PATH := "user://settings.cfg"
 const VERSION := "0.1.0 (Phase 1 + horns)"
@@ -36,7 +38,7 @@ const ACTION_ORDER := [
 	"accelerate", "brake", "steer_left", "steer_right", "reverse", "engine",
 	"horn_1", "horn_2", "horn_3", "headlights", "handbrake", "camera",
 	"camera_1", "camera_2", "camera_3", "camera_4", "map",
-	"interact", "run", "gear_up", "gear_down", "transmission_mode",
+	"interact", "refuel", "run", "gear_up", "gear_down", "transmission_mode",
 	"indicator_left", "indicator_right", "help", "quick_save", "quick_load", "pause",
 ]
 
@@ -59,6 +61,7 @@ const ACTION_LABELS := {
 	"camera_4": "Camera 4 - top view",
 	"map": "World map",
 	"interact": "Get in / get out of truck",
+	"refuel": "Refuel at pump / call for diesel",
 	"run": "Run (on foot)",
 	"gear_up": "Gear up (manual)",
 	"gear_down": "Gear down (manual)",
@@ -76,7 +79,7 @@ const DEFAULT_KEYS := {
 	"reverse": KEY_R, "engine": KEY_E, "horn_1": KEY_H, "horn_2": KEY_J, "horn_3": KEY_K,
 	"headlights": KEY_L, "handbrake": KEY_SPACE, "camera": KEY_C, "map": KEY_M,
 	"camera_1": KEY_1, "camera_2": KEY_2, "camera_3": KEY_3, "camera_4": KEY_4,
-	"interact": KEY_F, "run": KEY_SHIFT, "gear_up": KEY_SHIFT, "gear_down": KEY_CTRL,
+	"interact": KEY_F, "refuel": KEY_G, "run": KEY_SHIFT, "gear_up": KEY_SHIFT, "gear_down": KEY_CTRL,
 	"transmission_mode": KEY_T, "indicator_left": KEY_BRACKETLEFT,
 	"indicator_right": KEY_BRACKETRIGHT, "help": KEY_F1, "quick_save": KEY_F5,
 	"quick_load": KEY_F9, "pause": KEY_ESCAPE,
@@ -144,12 +147,19 @@ func preset() -> Dictionary:
 	return PRESETS[key]
 
 
-func set_setting(key: String, value) -> void:
+## persist=false applies the value without writing settings.cfg (used while a
+## slider is being dragged; the menu saves once when the drag ends).
+func set_setting(key: String, value, persist := true) -> void:
+	if settings.get(key) == value and persist:
+		return
 	settings[key] = value
-	save_settings()
+	if persist:
+		save_settings()
 	apply_display()
 	apply_audio()
 	settings_changed.emit()
+	if key.begins_with("cabin_photo"):
+		cabin_photo_changed.emit()
 
 
 # ---------------------------------------------------------------- persistence

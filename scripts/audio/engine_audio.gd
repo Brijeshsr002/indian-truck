@@ -15,6 +15,7 @@ var _sub := 0.0
 var _lp := 0.0
 var _level := 0.0
 var _rng := RandomNumberGenerator.new()
+var _silence := PackedVector2Array()
 
 
 func _ready() -> void:
@@ -34,6 +35,12 @@ func _process(_delta: float) -> void:
 		return
 	var frames := _playback.get_frames_available()
 	if frames <= 0:
+		return
+	if not running and _level < 0.0005:
+		# Engine off and faded out: feed silence without per-sample work.
+		if _silence.size() != frames:
+			_silence.resize(frames)
+		_playback.push_buffer(_silence)
 		return
 	var buf := PackedVector2Array()
 	buf.resize(frames)

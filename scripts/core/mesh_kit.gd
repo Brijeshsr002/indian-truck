@@ -62,6 +62,7 @@ static func label3d(parent: Node, text: String, xf: Transform3D, font_size := 48
 	l.transform = xf
 	l.alpha_cut = Label3D.ALPHA_CUT_DISCARD
 	l.double_sided = false
+	l.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	if vis_range > 0.0:
 		l.visibility_range_end = vis_range
 	parent.add_child(l)

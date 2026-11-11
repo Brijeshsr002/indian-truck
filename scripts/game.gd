@@ -31,6 +31,7 @@ var _bench_frames := 0
 var _bench_time := 0.0
 var _bench_min_fps := 9999.0
 var _night := false
+var _daylight_t := 0.0
 
 
 func _ready() -> void:
@@ -148,6 +149,12 @@ func _apply_settings() -> void:
 	GameConfig.apply_graphics(get_viewport(), env, sun, rig.camera)
 	truck.apply_graphics(p)
 	truck.horn.combined = bool(GameConfig.settings.get("combined_horn", false))
+	# Settings are the single source of truth for the gearbox mode.
+	var want_auto := bool(GameConfig.settings.get("auto_transmission", true))
+	if truck.auto_transmission != want_auto:
+		truck.auto_transmission = want_auto
+		if want_auto and truck.gear == 0:
+			truck.gear = 1
 	world.streamer.radius = float(p["stream_radius"])
 
 
@@ -173,7 +180,10 @@ func _physics_process(_delta: float) -> void:
 
 func _process(delta: float) -> void:
 	game_minutes = fmod(game_minutes + delta * DAY_MINUTES_PER_SECOND, 1440.0)
-	_update_daylight()
+	_daylight_t -= delta
+	if _daylight_t <= 0.0:
+		_daylight_t = 0.5  # sky and sun change slowly; no need to update every frame
+		_update_daylight()
 	if mode == PlayMode.DRIVING and not external_control:
 		for i in range(3):
 			truck.horn.set_horn(i, Input.is_action_pressed("horn_%d" % (i + 1)))
@@ -286,6 +296,9 @@ func _unhandled_input(event: InputEvent) -> void:
 			rig.set_truck_camera(i)
 			hud.notify(rig.camera_name(), 1.5)
 			return
+	if event.is_action_pressed("refuel"):
+		try_refuel()
+		return
 	if event.is_action_pressed("engine"):
 		truck.toggle_engine()
 	elif event.is_action_pressed("headlights"):
@@ -296,8 +309,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		truck.toggle_reverse()
 	elif event.is_action_pressed("transmission_mode"):
 		truck.toggle_transmission()
-		GameConfig.settings["auto_transmission"] = truck.auto_transmission
-		GameConfig.save_settings()
+		# Through set_setting so the settings menu checkbox and listeners stay in sync.
+		GameConfig.set_setting("auto_transmission", truck.auto_transmission)
 	elif event.is_action_pressed("indicator_left"):
 		truck.toggle_indicator(-1)
 	elif event.is_action_pressed("indicator_right"):
@@ -357,16 +370,32 @@ func exit_truck() -> bool:
 
 func _find_exit_spot() -> Variant:
 	var space := get_world_3d().direct_space_state
+	var capsule := CapsuleShape3D.new()
+	capsule.radius = 0.32
+	capsule.height = 1.75
 	for local in [Truck.DOOR_RIGHT_LOCAL, Truck.DOOR_LEFT_LOCAL, Vector3(0, 0, -6.5)]:
 		var p: Vector3 = truck.global_transform * local
-		var q := PhysicsRayQueryParameters3D.create(p + Vector3(0, 5, 0), p + Vector3(0, -10, 0), 1)
+		# Cast down from just above the truck roof. Overhead structures (flyover
+		# deck) are above the start point and ignored; a ray starting inside a
+		# building passes through it, and the capsule check below rejects that spot.
+		var start_y := truck.global_position.y + 3.5
+		var q := PhysicsRayQueryParameters3D.create(Vector3(p.x, start_y, p.z), Vector3(p.x, start_y - 15.0, p.z), 1)
 		q.exclude = [truck.get_rid()]
 		var hit := space.intersect_ray(q)
-		if hit.is_empty():
-			return Vector3(p.x, 0.1, p.z)
-		var hp: Vector3 = hit["position"]
-		if hp.y < truck.global_position.y + 0.5:
-			return hp + Vector3(0, 0.05, 0)
+		var spot := Vector3(p.x, 0.05, p.z)
+		if not hit.is_empty():
+			var hp: Vector3 = hit["position"]
+			if hp.y > truck.global_position.y + 0.5:
+				continue  # wall top or kerb too high to stand on
+			spot = hp + Vector3(0, 0.05, 0)
+		# Make sure the driver's body would not be inside anything.
+		var sq := PhysicsShapeQueryParameters3D.new()
+		sq.shape = capsule
+		sq.transform = Transform3D(Basis(), spot + Vector3(0, 0.95, 0))
+		sq.collision_mask = 1
+		sq.exclude = [truck.get_rid()]
+		if space.intersect_shape(sq, 1).is_empty():
+			return spot
 	return null
 
 
@@ -381,7 +410,51 @@ func try_enter_truck() -> bool:
 	return true
 
 
+const EMERGENCY_DIESEL_L := 40.0
+const PUMP_RADIUS_M := 18.0
+
+
+func at_fuel_pump() -> bool:
+	for lm in world.landmarks:
+		if String(lm["name"]) == "Kovai Fuels":
+			var p: Vector2 = lm["pos"]
+			return Vector2(truck.global_position.x - p.x, truck.global_position.z - p.y).length() < PUMP_RADIUS_M
+	return false
+
+
+## Fills the tank at the pump, or calls roadside assistance when empty elsewhere.
+## Returns the litres added.
+func try_refuel() -> float:
+	if mode != PlayMode.DRIVING:
+		return 0.0
+	if truck.speed_kmh > 2.0:
+		hud.notify("Stop the truck before refuelling.")
+		return 0.0
+	if at_fuel_pump():
+		if truck.engine_on:
+			hud.notify("Switch off the engine (%s) before refuelling." % GameConfig.key_name("engine"))
+			return 0.0
+		if truck.fuel >= Truck.FUEL_CAPACITY - 1.0:
+			hud.notify("The tank is already full.")
+			return 0.0
+		var added := Truck.FUEL_CAPACITY - truck.fuel
+		truck.fuel = Truck.FUEL_CAPACITY
+		hud.notify("Tank full. Added %.0f litres of diesel." % added)
+		return added
+	if truck.fuel < 1.0:
+		truck.fuel += EMERGENCY_DIESEL_L
+		hud.notify("Roadside assistance brought %.0f litres of emergency diesel." % EMERGENCY_DIESEL_L)
+		return EMERGENCY_DIESEL_L
+	hud.notify("Refuel at the Kovai Fuels pumps on Avinashi Road (Peelamedu).")
+	return 0.0
+
+
 func prompt_text() -> String:
+	if mode == PlayMode.DRIVING and truck.speed_kmh < 2.0:
+		if at_fuel_pump() and truck.fuel < Truck.FUEL_CAPACITY - 1.0:
+			return "Press %s to fill diesel (engine off)" % GameConfig.key_name("refuel")
+		if truck.fuel < 1.0:
+			return "Out of diesel. Press %s to call roadside assistance" % GameConfig.key_name("refuel")
 	if mode == PlayMode.ON_FOOT:
 		if truck.distance_to_door(driver.global_position) <= 3.0:
 			return "Press %s to get in the truck" % GameConfig.key_name("interact")
@@ -426,6 +499,8 @@ func save_game(path: String = SaveSystem.SAVE_PATH, silent := false) -> bool:
 
 func load_game(path: String = SaveSystem.SAVE_PATH) -> bool:
 	var res: Dictionary = SaveSystem.load_data(path)
+	if res.get("ok", false) and res.has("warning"):
+		hud.notify(String(res["warning"]), 6.0)
 	if not res["ok"]:
 		hud.notify(String(res["error"]))
 		return false
@@ -435,6 +510,9 @@ func load_game(path: String = SaveSystem.SAVE_PATH) -> bool:
 	game_minutes = float(d.get("game_minutes", 480.0))
 	rig.last_truck_mode = int(d.get("camera", CameraRig.Mode.CHASE))
 	_set_mode(PlayMode.ON_FOOT if String(d.get("mode", "driving")) == "foot" else PlayMode.DRIVING)
+	if mode == PlayMode.ON_FOOT:
+		var dd: Dictionary = d.get("driver", {})
+		rig.yaw = float(dd.get("yaw", 0.0)) + PI  # camera behind the driver
 	world.streamer.update_now(true)
 	hud.notify("Saved game loaded.")
 	return true

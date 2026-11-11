@@ -9,6 +9,8 @@ extends Node3D
 
 const DEFAULT_IMAGE := "res://assets/cabin/murugan_default.jpg"
 const USER_IMAGE := "user://cabin_photo.png"
+## Where the player photo is stored. Tests point this at a scratch file.
+static var user_image_path := USER_IMAGE
 const PHOTO_HEIGHT := 0.22
 
 ## Positions on the dashboard (truck local space; the driver sits at x = -0.55).
@@ -136,8 +138,8 @@ func rebuild() -> void:
 func _load_texture() -> Texture2D:
 	image_size = Vector2i.ZERO
 	source = ""
-	if FileAccess.file_exists(USER_IMAGE):
-		var img := Image.load_from_file(USER_IMAGE)
+	if FileAccess.file_exists(user_image_path):
+		var img := Image.load_from_file(user_image_path)
 		if img != null and not img.is_empty():
 			img.generate_mipmaps()
 			image_size = img.get_size()
@@ -163,12 +165,12 @@ static func import_photo(path: String) -> String:
 	if longest > 1024:
 		var s := 1024.0 / float(longest)
 		img.resize(maxi(1, int(img.get_width() * s)), maxi(1, int(img.get_height() * s)), Image.INTERPOLATE_LANCZOS)
-	var err := img.save_png(USER_IMAGE)
+	var err := img.save_png(user_image_path)
 	if err != OK:
 		return "Could not save the photo (%s)." % error_string(err)
 	return ""
 
 
 static func clear_photo() -> void:
-	if FileAccess.file_exists(USER_IMAGE):
-		DirAccess.remove_absolute(ProjectSettings.globalize_path(USER_IMAGE))
+	if FileAccess.file_exists(user_image_path):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(user_image_path))

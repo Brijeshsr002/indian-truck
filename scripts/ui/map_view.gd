@@ -24,7 +24,14 @@ func setup(w: CoimbatoreWorld, g: Node, is_full: bool) -> void:
 			_pieces.append([a.lerp(b, float(i) / n), a.lerp(b, float(i + 1) / n), float(r["w"])])
 
 
-func _process(_d: float) -> void:
+var _redraw_t := 0.0
+
+
+func _process(delta: float) -> void:
+	_redraw_t -= delta
+	if full and _redraw_t > 0.0:  # the heading-up minimap redraws every frame
+		return
+	_redraw_t = 1.0 / 15.0  # 15 redraws per second is plenty for gauges and maps
 	if visible:
 		queue_redraw()
 
