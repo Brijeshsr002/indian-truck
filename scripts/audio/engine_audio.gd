@@ -30,6 +30,14 @@ func _ready() -> void:
 	_playback = get_stream_playback() as AudioStreamGeneratorPlayback
 
 
+## Stop feeding the generator before the node is freed, so the audio thread never
+## mixes a playback whose owner is being destroyed (shutdown or a new game).
+func _exit_tree() -> void:
+	set_process(false)
+	stop()
+	_playback = null
+
+
 func _process(_delta: float) -> void:
 	if _playback == null:
 		return

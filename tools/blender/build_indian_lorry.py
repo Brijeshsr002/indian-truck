@@ -484,14 +484,14 @@ box(body, M["cab"], (0.3, 2.565, 3.4), (0.7, 0.03, 0.6), bevel=0.02)
 
 # ---- wipers (separate objects, pivot at origin)
 wipers = []
-for (name, px) in (("Wiper_L", 0.55), ("Wiper_R", -0.45)):
+for (name, px) in (("Wiper_L", 0.55), ("Wiper_R", -0.36)):
     py = 1.63
     w = Out(name, (px, py, ws_z(py) + 0.03))
     slope_deg = math.degrees(math.atan((CAB_FRONT - WS_TOP[0]) / (WS_TOP[1] - WS_KNEE_Y)))
     # arm lies on the glass, pointing towards the truck's right (-X) and slightly up
     cyl(w, M["black"], (px, py, ws_z(py) + 0.03), 0.025, 0.025, 0.03, 10, (90 - slope_deg, 0, 0))
-    box(w, M["black"], (px - 0.3, py + 0.06, ws_z(py + 0.06) + 0.035), (0.6, 0.018, 0.012), (-slope_deg, 0, 10))
-    box(w, M["rubber"], (px - 0.36, py + 0.07, ws_z(py + 0.07) + 0.02), (0.68, 0.02, 0.02), (-slope_deg, 0, 10))
+    box(w, M["black"], (px - 0.3, py + 0.06, ws_z(py + 0.06) + 0.035), (0.6, 0.018, 0.012), (-slope_deg, 0, -10))
+    box(w, M["rubber"], (px - 0.36, py + 0.07, ws_z(py + 0.07) + 0.02), (0.68, 0.02, 0.02), (-slope_deg, 0, -10))
     wipers.append(w)
 
 # ---- glass panes

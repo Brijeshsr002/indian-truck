@@ -29,6 +29,10 @@ const STEER_RATE := 0.9
 const COCKPIT_EYE := Vector3(-0.55, 2.05, 3.35)
 const DOOR_RIGHT_LOCAL := Vector3(-2.4, 0.0, 3.7)
 const DOOR_LEFT_LOCAL := Vector3(2.4, 0.0, 3.7)
+## Wipers: seconds per full sweep (up and back) for slow and fast, and sweep angle.
+const WIPER_PERIODS := [0.0, 1.7, 0.85]
+const WIPER_SWEEP_DEG := 95.0
+const WIPER_MODE_NAMES := ["off", "slow", "fast"]
 
 # ---- controls
 var throttle_input := 0.0
@@ -44,6 +48,7 @@ var auto_transmission := true
 var fuel := 300.0
 var headlights_on := false
 var indicator := 0
+var wiper_mode := 0  # 0 off, 1 slow, 2 fast
 var speed_kmh := 0.0
 var forward_speed := 0.0
 var cargo_mass := 0.0
@@ -73,6 +78,10 @@ var _cab_sfx: AudioStreamPlayer3D
 var _mats := {}
 var _headlights: Array[SpotLight3D] = []
 var _lamp_key: Array = []
+var _wipers: Array[Node3D] = []
+var _wiper_rest: Array[Basis] = []
+var _wiper_axis := Vector3.FORWARD
+var _wiper_phase := 0.0  # 0..TAU per sweep; 0 = parked
 
 
 func _ready() -> void:
@@ -93,6 +102,7 @@ func _ready() -> void:
 		_mats = TruckModel.build(self)
 		model_kind = "simple"
 	steering_spinner = _mats.get("spinner")
+	_setup_wipers()
 	_build_lights()
 	_build_audio()
 	cockpit_anchor = Node3D.new()
@@ -155,9 +165,10 @@ func _build_lights() -> void:
 		var l := SpotLight3D.new()
 		l.position = Vector3(0.86 * sx, 0.7, 5.0)
 		l.rotation = Vector3(deg_to_rad(-3), PI, 0)
-		l.spot_range = 75.0
+		l.spot_range = 90.0
 		l.spot_angle = 30.0
-		l.light_energy = 5.0
+		# Rebalanced for linear world colours and tonemap white 6 (was 5).
+		l.light_energy = 22.0
 		l.light_color = Color(1.0, 0.95, 0.85)
 		l.shadow_enabled = false
 		l.visible = false
@@ -386,6 +397,61 @@ func _update_light_visuals() -> void:
 	(_mats["ind_r"] as StandardMaterial3D).emission_energy_multiplier = 4.0 if (_blink_on and indicator > 0) else 0.0
 
 
+
+# ---------------------------------------------------------------- wipers
+
+func _setup_wipers() -> void:
+	for w in _mats.get("wipers", []):
+		if w is Node3D:
+			_wipers.append(w)
+			_wiper_rest.append((w as Node3D).basis)
+	# Rotate about the windscreen normal (the glass leans back about 10.7 degrees).
+	_wiper_axis = Vector3(0.0, sin(deg_to_rad(10.7)), cos(deg_to_rad(10.7))).normalized()
+
+
+func has_wipers() -> bool:
+	return not _wipers.is_empty()
+
+
+## Current wiper arm angle in degrees (0 = parked).
+func wiper_angle_deg() -> float:
+	return WIPER_SWEEP_DEG * (0.5 - 0.5 * cos(_wiper_phase))
+
+
+func _process(delta: float) -> void:
+	_update_wipers(delta)
+
+
+func _update_wipers(delta: float) -> void:
+	if _wipers.is_empty():
+		return
+	if wiper_mode > 0:
+		_wiper_phase = fmod(_wiper_phase + TAU * delta / float(WIPER_PERIODS[wiper_mode]), TAU)
+	elif _wiper_phase > 0.0:
+		# Switched off: finish the sweep at slow speed and park, like a real wiper motor.
+		_wiper_phase += TAU * delta / float(WIPER_PERIODS[1])
+		if _wiper_phase >= TAU:
+			_wiper_phase = 0.0
+	else:
+		return
+	# Negative rotation about the forward-facing normal lifts the arms upwards.
+	var rot := Basis(_wiper_axis, -deg_to_rad(wiper_angle_deg()))
+	for i in _wipers.size():
+		_wipers[i].basis = rot * _wiper_rest[i]
+
+
+func cycle_wipers() -> void:
+	if not has_wipers():
+		notify.emit("This truck model has no wipers.")
+		return
+	set_wipers((wiper_mode + 1) % 3)
+	notify.emit("Wipers %s." % WIPER_MODE_NAMES[wiper_mode])
+
+
+func set_wipers(mode: int) -> void:
+	# A model without wipers keeps them off, so the dashboard lamp never lies.
+	wiper_mode = clampi(mode, 0, 2) if has_wipers() else 0
+
 # ---------------------------------------------------------------- driver commands
 
 func set_controls(throttle: float, brake_amount: float, steer: float) -> void:
@@ -511,6 +577,7 @@ func get_state() -> Dictionary:
 		"engine_on": engine_on, "fuel": fuel, "gear": gear, "auto": auto_transmission,
 		"lights": headlights_on, "handbrake": handbrake_on, "odometer": odometer_km,
 		"fuel_used": fuel_used_l,
+		"wipers": wiper_mode,
 	}
 
 
@@ -527,3 +594,4 @@ func apply_state(d: Dictionary) -> void:
 	odometer_km = float(d.get("odometer", 0.0))
 	fuel_used_l = float(d.get("fuel_used", 0.0))
 	set_headlights(bool(d.get("lights", false)))
+	set_wipers(int(d.get("wipers", 0)))

@@ -53,12 +53,13 @@ func _draw() -> void:
 	draw_string(font, Vector2(fx - 8, 178), "%d L" % roundi(truck.fuel), HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color.WHITE)
 	# warning lamps
 	var lx := 460.0
-	_lamp(font, Vector2(lx, 30), "ENG", Color(0.3, 0.9, 0.4) if truck.engine_on else Color(0.9, 0.25, 0.2), true)
-	_lamp(font, Vector2(lx, 62), "P", Color(1.0, 0.25, 0.2), truck.handbrake_on)
-	_lamp(font, Vector2(lx, 94), "LIGHT", Color(0.4, 0.75, 1.0), truck.headlights_on)
+	_lamp(font, Vector2(lx, 14), "ENG", Color(0.3, 0.9, 0.4) if truck.engine_on else Color(0.9, 0.25, 0.2), true)
+	_lamp(font, Vector2(lx, 44), "P", Color(1.0, 0.25, 0.2), truck.handbrake_on)
+	_lamp(font, Vector2(lx, 74), "LIGHT", Color(0.4, 0.75, 1.0), truck.headlights_on)
 	var blink := fmod(Time.get_ticks_msec() / 1000.0, 0.7) < 0.35
-	_lamp(font, Vector2(lx, 126), "<  >", Color(0.3, 0.9, 0.4), truck.indicator != 0 and blink)
-	_lamp(font, Vector2(lx, 158), "AUTO" if truck.auto_transmission else "MAN", ACCENT, true)
+	_lamp(font, Vector2(lx, 104), "<  >", Color(0.3, 0.9, 0.4), truck.indicator != 0 and blink)
+	_lamp(font, Vector2(lx, 134), ["WIPE", "WIPE", "WIPE+"][truck.wiper_mode], Color(0.4, 0.75, 1.0), truck.wiper_mode > 0)
+	_lamp(font, Vector2(lx, 164), "AUTO" if truck.auto_transmission else "MAN", ACCENT, true)
 
 
 func _lamp(font: Font, pos: Vector2, text: String, col: Color, on: bool) -> void:

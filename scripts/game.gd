@@ -4,6 +4,7 @@ extends Node3D
 ##   IndianTruckSimulator.exe -- --bench --frames=900 --out=C:/path/result.txt --shot=C:/path/shot.png
 ## Options: --cam=chase|cockpit|bumper|top|foot  --hour=18  --autodrive  --spawn=x,z,yaw_degrees
 ##          --preset=low|medium|high (this run only; the saved setting is kept)
+##          --lights (headlights on)  --wipers=1|2 (slow or fast)
 
 enum PlayMode { DRIVING, ON_FOOT }
 
@@ -88,12 +89,17 @@ func _ready() -> void:
 				rig.set_mode(CameraRig.Mode.TOP)
 			"foot":
 				exit_truck()
+	if _cli.has("lights"):
+		truck.set_headlights(true)
+	if _cli.has("wipers"):
+		truck.set_wipers(int(_cli["wipers"]))
 	if _cli.has("autodrive"):
 		truck.engine_on = true
 		truck.rpm = Truck.IDLE_RPM
 		truck.handbrake_on = false
 	_update_daylight()
-	if not _is_headless() and not external_control:
+	# Benchmark and screenshot runs never grab the mouse, so moving it cannot turn the camera.
+	if not _is_headless() and not external_control and not (_cli.has("bench") or _cli.has("shot")):
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	if not loaded:
 		hud.notify("Vanakkam! Welcome to Coimbatore. Press %s for controls." % GameConfig.key_name("help"), 6.0)
@@ -135,6 +141,13 @@ func _build_environment() -> void:
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
 	env.ambient_light_energy = 0.9
 	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+	# A white point of 1.0 clipped sunlit ground to pure white. 6.0 keeps highlights
+	# (light concrete, white paint) readable; the sun is raised to match.
+	env.tonemap_white = 6.0
+	# Part of the ambient light is a warm neutral, so sunlit ground is not tinted
+	# cyan by the blue sky.
+	env.ambient_light_sky_contribution = 0.6
+	env.ambient_light_color = Color(0.85, 0.82, 0.76)
 	env.fog_enabled = true
 	env.fog_light_color = Color(0.75, 0.78, 0.8)
 	env.fog_sky_affect = 0.25
@@ -235,12 +248,12 @@ func _update_daylight() -> void:
 	var dusk := clampf(1.0 - absf(elev) * 4.0, 0.0, 1.0)
 	if elev > -0.05:
 		sun.global_transform.basis = Basis.looking_at(-s, Vector3.UP if absf(s.y) < 0.99 else Vector3.FORWARD)
-		sun.light_energy = 0.15 + 1.0 * day
+		sun.light_energy = 0.2 + 2.2 * day
 		sun.light_color = Color(1.0, 0.95, 0.88).lerp(Color(1.0, 0.6, 0.35), dusk)
 	else:
 		var m := Vector3(-cos(a), -sin(a), 0.35).normalized()
 		sun.global_transform.basis = Basis.looking_at(-m, Vector3.UP)
-		sun.light_energy = 0.12
+		sun.light_energy = 0.3  # moonlight, rebalanced with the day sun
 		sun.light_color = Color(0.55, 0.65, 0.9)
 	var night_top := Color(0.02, 0.03, 0.08)
 	var day_top := Color(0.28, 0.5, 0.82)
@@ -251,7 +264,7 @@ func _update_daylight() -> void:
 	sky_mat.sky_horizon_color = Color(0.05, 0.06, 0.1).lerp(hor, clampf(day + dusk * 0.6, 0.0, 1.0))
 	sky_mat.ground_horizon_color = sky_mat.sky_horizon_color
 	sky_mat.ground_bottom_color = Color(0.1, 0.1, 0.1)
-	env.ambient_light_energy = 0.25 + 0.75 * day
+	env.ambient_light_energy = 0.25 + 0.6 * day
 	env.fog_light_color = sky_mat.sky_horizon_color
 	var night := elev < 0.05
 	if night != _night:
@@ -307,6 +320,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		truck.toggle_engine()
 	elif event.is_action_pressed("headlights"):
 		truck.toggle_headlights()
+	elif event.is_action_pressed("wipers"):
+		truck.cycle_wipers()
 	elif event.is_action_pressed("handbrake"):
 		truck.toggle_handbrake()
 	elif event.is_action_pressed("reverse"):

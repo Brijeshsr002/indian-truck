@@ -25,7 +25,7 @@ static func vertex_color_material() -> StandardMaterial3D:
 	if _vc_material == null:
 		var m := StandardMaterial3D.new()
 		m.vertex_color_use_as_albedo = true
-		m.vertex_color_is_srgb = true
+		m.vertex_color_is_srgb = false  # already converted in _push()
 		m.roughness = 0.9
 		_vc_material = m
 	return _vc_material
@@ -42,7 +42,10 @@ func vertex_count() -> int:
 func _push(p: Vector3, n: Vector3, c: Color) -> int:
 	verts.append(p)
 	normals.append(n)
-	colors.append(c)
+	# Colours are written in sRGB (as picked by eye); shading needs linear values.
+	# Converted here because the material flag vertex_color_is_srgb has no effect
+	# in the Compatibility renderer (measured: toggling it changed no pixel).
+	colors.append(c.srgb_to_linear())
 	return verts.size() - 1
 
 

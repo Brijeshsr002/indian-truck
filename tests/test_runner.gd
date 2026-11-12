@@ -60,6 +60,13 @@ func _run() -> void:
 	_test_settings()
 	print("----")
 	print("RESULT: %d passed, %d failed, %.1f s" % [passes, failures, (Time.get_ticks_msec() - t0) / 1000.0])
+	# Free the game ourselves and let deletions finish before quitting, so engine
+	# shutdown does not tear down a running truck, audio and physics all at once.
+	if game != null:
+		game.queue_free()
+		game = null
+	for i in range(3):
+		await get_tree().process_frame
 	get_tree().quit(1 if failures > 0 else 0)
 
 
@@ -132,6 +139,14 @@ func _test_truck_model() -> void:
 	t.set_controls(0.0, 0.0, 0.0)
 	t.set_handbrake(true)
 	await _frames(60)
+	# World colours: written in sRGB, stored linear (the material flag does nothing in
+	# the Compatibility renderer), and the tone curve no longer clips sunlit ground.
+	var mb := MeshBatcher.new()
+	mb.add_flat(Vector3.ZERO, 1.0, 1.0, Color(0.5, 0.5, 0.5))
+	var stored: Color = mb.colors[0]
+	check(absf(stored.r - 0.214) < 0.01 and not MeshBatcher.vertex_color_material().vertex_color_is_srgb, "rendering: world colours converted to linear once", "0.5 stored as %.3f" % stored.r)
+	var env: Environment = game.get("env")
+	check(env.tonemap_white >= 4.0, "rendering: tone curve white point keeps sunlit ground from clipping", "white %.1f" % env.tonemap_white)
 	var holder := Node3D.new()
 	add_child(holder)
 	var fallback := TruckModel.build(holder)
@@ -370,6 +385,39 @@ func _test_camera_keys() -> void:
 	var cam_pos := rig.camera.global_position
 	var t: Truck = game.get("truck")
 	check(cam_pos.distance_to(t.global_position) > 5.0, "camera 2: chase camera sits behind/above the truck", "%.1f m away" % cam_pos.distance_to(t.global_position))
+	# Wipers: V cycles off -> slow -> fast -> off; arms sweep and park when switched off.
+	var wl := t.get_node_or_null("Model/Wiper_L") as Node3D
+	check(t.has_wipers() and wl != null, "wipers: both wiper arms found on the model")
+	if wl != null:
+		var rest := wl.basis
+		await _press(KEY_V)
+		await _frames(25)
+		var ang := rad_to_deg(rest.get_rotation_quaternion().angle_to(wl.basis.get_rotation_quaternion()))
+		check(t.wiper_mode == 1 and ang > 20.0 and ang <= Truck.WIPER_SWEEP_DEG + 0.5, "wipers: key V starts the wipers and the arms sweep", "mode %d, arm at %.0f deg" % [t.wiper_mode, ang])
+		var max_ang := 0.0
+		for i in range(110):
+			await get_tree().process_frame
+			max_ang = maxf(max_ang, t.wiper_angle_deg())
+		check(max_ang > Truck.WIPER_SWEEP_DEG - 3.0 and max_ang <= Truck.WIPER_SWEEP_DEG + 0.01, "wipers: full sweep reaches the set angle", "%.1f deg" % max_ang)
+		await _press(KEY_V)
+		check(t.wiper_mode == 2, "wipers: second press selects fast")
+		await _press(KEY_V)
+		check(t.wiper_mode == 0, "wipers: third press switches them off")
+		await _frames(130)
+		check(wl.basis.is_equal_approx(rest), "wipers: arms park back at rest after switching off")
+		t.set_wipers(2)
+		var st := t.get_state()
+		t.set_wipers(0)
+		t.apply_state(st)
+		check(t.wiper_mode == 2, "wipers: wiper setting kept in save games")
+		t.set_wipers(0)
+		# A model without wipers (simple fallback) keeps them off and the lamp dark.
+		var saved_wipers := t._wipers.duplicate()
+		t._wipers.clear()
+		t.cycle_wipers()
+		check(t.wiper_mode == 0, "wipers: model without wipers keeps the WIPE lamp off")
+		t._wipers.assign(saved_wipers)
+		await _frames(130)
 	game.set("external_control", true)
 
 

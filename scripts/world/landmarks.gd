@@ -160,7 +160,7 @@ static func _petrol(L: Transform3D, b: MeshBatcher, lamps: MeshBatcher, body: St
 
 
 static func _bus_stand(L: Transform3D, b: MeshBatcher, body: StaticBody3D, root: Node3D) -> void:
-	_flat(b, L, Vector3(0, 0.035, 0), 76, 60, Color(0.68, 0.67, 0.64))
+	_flat(b, L, Vector3(0, 0.035, 0), 76, 60, Color(0.55, 0.53, 0.49))
 	_bx(b, null, L, Vector3(0, 6.3, -2), Vector3(60, 0.6, 22), Color(0.72, 0.72, 0.7), false)
 	for i in range(7):
 		var x := -27.0 + i * 9.0

@@ -26,11 +26,21 @@ Updated: 11 Nov 2026. "Tested" means covered by `tests/test_runner.gd` or checke
 | Three horns with H/J/K, rebinding, combined mode | Done, tested |
 | Vel decoration and cabin tassels | Done (fixed, not yet a garage choice) |
 
+## Phase 2 - realistic truck
+
+| Feature | Status | Notes |
+|---|---|---|
+| Detailed Indian cab-over lorry (Blender, PBR, CC0 textures) | Done, tested | tools/blender/build_indian_lorry.py; simple model kept as a fallback. |
+| Parked lorries in the yard use the new model | Done, tested | Own cab colours. |
+| Windscreen wipers (V: off / slow / fast) | Done, tested | Sweep 95 degrees, park when switched off, WIPE lamp, saved in save games. |
+| Correct world colours and daylight exposure | Done, tested | Vertex colours converted to linear; tone white point 6; sun, moon and headlights rebalanced. Sunlit yard and bus stand no longer render white. |
+| Intermittent crash on quit | Fixed, tested | Engine sound generator is stopped before it is freed; 12 of 12 clean runs (was 2 crashes in 8). |
+
 ## Known limitations
 
-- All art is placeholder geometry. Realistic truck, human and textures are the next task.
+- The world, human and trees are still simple geometry; realistic environment is Phase 3, human is Phase 7.
 - No traffic, NPCs, weather or jobs yet (later phases).
 - Mirrors are not reflective yet (needs extra render passes; will be a Medium/High option).
-- No clutch pedal or wipers yet.
+- No clutch pedal yet. Wipers work but there is no rain yet (Phase 6).
 - Tamil signs use the Windows "Nirmala UI" font; on non-Windows systems they may not render.
 - Steering wheels work as generic joypads; there is no force feedback or wheel setup screen yet.
