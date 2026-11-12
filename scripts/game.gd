@@ -2,7 +2,8 @@ extends Node3D
 ## Gameplay scene. Builds world, truck, driver, camera, HUD and pause menu, and
 ## routes input. Also supports command-line benchmark / screenshot runs:
 ##   IndianTruckSimulator.exe -- --bench --frames=900 --out=C:/path/result.txt --shot=C:/path/shot.png
-## Options: --cam=chase|cockpit|foot  --hour=18  --autodrive  --spawn=x,z,yaw_degrees
+## Options: --cam=chase|cockpit|bumper|top|foot  --hour=18  --autodrive  --spawn=x,z,yaw_degrees
+##          --preset=low|medium|high (this run only; the saved setting is kept)
 
 enum PlayMode { DRIVING, ON_FOOT }
 
@@ -109,6 +110,9 @@ func _parse_cli() -> void:
 			continue
 		var parts := arg.substr(2).split("=", true, 1)
 		_cli[parts[0]] = parts[1] if parts.size() > 1 else "1"
+	# Benchmark a preset for this run only; the saved setting is not changed.
+	if (_cli.has("bench") or _cli.has("shot")) and _cli.has("preset") and GameConfig.PRESETS.has(String(_cli["preset"])):
+		GameConfig.set_setting("graphics_preset", String(_cli["preset"]), false)
 
 
 func _initial_truck_transform() -> Transform3D:

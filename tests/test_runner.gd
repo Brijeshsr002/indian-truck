@@ -12,6 +12,8 @@ var failures := 0
 
 func _ready() -> void:
 	GameConfig.test_mode = true
+	# Tests must not depend on the player's saved choices (for example the manual gearbox).
+	GameConfig.settings["auto_transmission"] = true
 	# Never touch the player's real dashboard photo.
 	DashboardPhoto.user_image_path = "user://test_cabin_photo.png"
 	call_deferred("_run")
@@ -49,6 +51,7 @@ func _upright(t: Truck) -> bool:
 func _run() -> void:
 	var t0 := Time.get_ticks_msec()
 	await _test_spawn_yard()
+	await _test_truck_model()
 	await _test_drive_flyover_brakes()
 	await _test_open_ground()
 	await _test_camera_keys()
@@ -72,6 +75,70 @@ func _test_spawn_yard() -> void:
 	check(world.streamer.loaded_count() > 0, "world: chunks streamed in near spawn", "%d chunks" % world.streamer.loaded_count())
 	check(world.chunk_specs.size() > 20, "world: chunk plan built", "%d chunks planned" % world.chunk_specs.size())
 	check(world.location_name(t.global_position).length() > 3, "world: location name", world.location_name(t.global_position))
+
+
+## Phase 2: detailed Blender truck model.
+func _test_truck_model() -> void:
+	var t: Truck = game.get("truck")
+	check(t.model_kind == "detailed", "truck model: detailed Blender model loaded", t.model_kind)
+	var model := t.get_node_or_null("Model") as Node3D
+	check(model != null, "truck model: model attached to the truck")
+	if model == null:
+		return
+	var missing: Array[String] = []
+	for p: String in ["Body", "Glass", "Lamp_head", "Lamp_brake", "Lamp_reverse", "Lamp_ind_l", "Lamp_ind_r", "Lamp_marker", "Wiper_L", "Wiper_R"]:
+		if model.find_child(p, true, false) == null:
+			missing.append(p)
+	check(missing.is_empty(), "truck model: all named parts present", str(missing))
+	check(model.find_child("WheelSingle", true, false) == null and model.find_child("WheelDual", true, false) == null, "truck model: wheel templates not left on the body")
+	var body := model.find_child("Body", true, false) as MeshInstance3D
+	var box := body.mesh.get_aabb()
+	var height := box.end.y + TruckVisual.RIDE_HEIGHT
+	# A real Indian 10-wheeler: about 2.5 m wide (3.3 m with mirrors), 9.8 m long, 3.3-3.6 m high.
+	check(box.size.x > 2.45 and box.size.x < 3.5 and box.size.z > 9.4 and box.size.z < 10.3 and height > 3.1 and height < 3.8,
+			"truck model: real-world proportions", "width %.2f m, length %.2f m, height %.2f m" % [box.size.x, box.size.z, height])
+	var textured := 0
+	for i in body.mesh.get_surface_count():
+		var m := body.mesh.surface_get_material(i) as StandardMaterial3D
+		if m and m.albedo_texture and m.normal_enabled and m.normal_texture:
+			textured += 1
+	check(body.mesh.get_surface_count() >= 20 and textured >= 4, "truck model: PBR materials with texture and normal maps", "%d materials, %d textured" % [body.mesh.get_surface_count(), textured])
+	var bad_wheels := 0
+	for w in t.all_wheels:
+		var mi := w.get_child(0) as MeshInstance3D
+		var r := mi.mesh.get_aabb().size.y * 0.5
+		var right_ok := w.position.x > 0.0 or is_equal_approx(mi.rotation.y, PI)
+		if absf(r - Truck.WHEEL_RADIUS) > 0.03 or not right_ok:
+			bad_wheels += 1
+	check(bad_wheels == 0, "truck model: model tyres match the physics wheel size and face outwards", "%d wrong" % bad_wheels)
+	var head := model.find_child("Lamp_head", true, false) as MeshInstance3D
+	var dim := (head.material_override as StandardMaterial3D).emission_energy_multiplier
+	t.set_headlights(true)
+	t._update_light_visuals()
+	var lit := (head.material_override as StandardMaterial3D).emission_energy_multiplier
+	t.set_headlights(false)
+	t._update_light_visuals()
+	check(lit > dim + 1.0, "truck model: headlamps light up on the new model", "%.1f -> %.1f" % [dim, lit])
+	check(t.steering_spinner != null and t.steering_spinner.is_inside_tree(), "truck model: steering wheel present")
+	# Steering: the cab steering wheel and the front tyres must visibly turn.
+	t.set_handbrake(false)
+	t.set_controls(0.0, 0.0, 1.0)
+	await _frames(60)
+	var front: VehicleWheel3D = t.all_wheels[0]
+	# Compare axle directions (basis.x): the wheel also spins about its axle as it rolls.
+	var tyre_angle := rad_to_deg(t.global_transform.basis.x.signed_angle_to(front.global_transform.basis.x, Vector3.UP))
+	check(absf(t.steering_spinner.rotation.y) > 1.0, "steering: cab steering wheel turns", "%.0f deg" % rad_to_deg(t.steering_spinner.rotation.y))
+	check(absf(tyre_angle) > 15.0, "steering: front tyres turn", "%.0f deg" % tyre_angle)
+	t.set_controls(0.0, 0.0, 0.0)
+	t.set_handbrake(true)
+	await _frames(60)
+	var holder := Node3D.new()
+	add_child(holder)
+	var fallback := TruckModel.build(holder)
+	check(fallback.has("head") and fallback.has("spinner"), "truck model: simple fallback model still builds")
+	holder.queue_free()
+	var parked := get_tree().root.find_children("ParkedLorry*", "", true, false)
+	check(parked.size() >= 2, "truck model: parked lorries in the yard use the new model", "%d found" % parked.size())
 
 
 func _test_drive_flyover_brakes() -> void:

@@ -1,6 +1,7 @@
 class_name TruckModel
 extends RefCounted
-## Builds the truck's visual model from primitives. This is PLACEHOLDER ART in an
+## Simple fallback truck model built from primitives, used only if the detailed
+## model (TruckVisual, assets/trucks/indian_lorry.gltf) cannot be loaded. It is an
 ## original design (no real manufacturer's model or branding). The truck faces +Z;
 ## it is right-hand drive, so the driver sits on the -X side.
 
@@ -136,25 +137,7 @@ static func build(truck: Node3D) -> Dictionary:
 		markers.append([Vector3(-1.0 + i * 0.4, 3.07, 4.8), Vector3(0.12, 0.08, 0.06)])
 	_lamp(truck, mats["marker"], markers)
 
-	# --- steering wheel (pivot tilts the column, spinner turns with steering)
-	var pivot := Node3D.new()
-	pivot.name = "SteeringPivot"
-	pivot.position = Vector3(-0.55, 1.6, 4.15)
-	pivot.rotation.x = deg_to_rad(-60)
-	truck.add_child(pivot)
-	var spinner := Node3D.new()
-	spinner.name = "SteeringWheel"
-	pivot.add_child(spinner)
-	var sw := MeshBatcher.new()
-	for i in range(14):
-		var a := TAU * float(i) / 14.0
-		sw.add_box(Transform3D(Basis(Vector3.UP, -a), Vector3(cos(a) * 0.23, 0, sin(a) * 0.23)), Vector3(0.04, 0.04, 0.115), Color(0.08, 0.08, 0.08))
-	for i in range(3):
-		var a2 := TAU * float(i) / 3.0 + PI / 2
-		sw.add_box(Transform3D(Basis(Vector3.UP, -a2 + PI / 2), Vector3(cos(a2) * 0.11, 0, sin(a2) * 0.11)), Vector3(0.22, 0.02, 0.04), Color(0.2, 0.2, 0.2))
-	sw.add_cylinder(Transform3D(Basis(), Vector3.ZERO), 0.06, 0.06, 0.05, 8, GOLD)
-	MeshKit.mesh_instance(spinner, sw.commit())
-	mats["spinner"] = spinner
+	mats["spinner"] = build_steering_wheel(truck)
 
 	# --- painted text (fictional company and registration)
 	MeshKit.label3d(truck, "MURUGAN TRANSPORT", Transform3D(Basis(), Vector3(0, 2.86, 4.975)), 40, Color(0.6, 0.05, 0.05), 0.0055, 90.0)
@@ -215,3 +198,26 @@ static func wheel_mesh(dual: bool, left_side: bool) -> ArrayMesh:
 	var mesh := b.commit()
 	_wheel_meshes[key] = mesh
 	return mesh
+
+
+## Steering wheel (shared by both truck models). The pivot tilts the column, the
+## returned spinner turns with the steering.
+static func build_steering_wheel(truck: Node3D) -> Node3D:
+	var pivot := Node3D.new()
+	pivot.name = "SteeringPivot"
+	pivot.position = Vector3(-0.55, 1.6, 4.15)
+	pivot.rotation.x = deg_to_rad(-60)
+	truck.add_child(pivot)
+	var spinner := Node3D.new()
+	spinner.name = "SteeringWheel"
+	pivot.add_child(spinner)
+	var sw := MeshBatcher.new()
+	for i in range(14):
+		var a := TAU * float(i) / 14.0
+		sw.add_box(Transform3D(Basis(Vector3.UP, -a), Vector3(cos(a) * 0.23, 0, sin(a) * 0.23)), Vector3(0.04, 0.04, 0.115), Color(0.08, 0.08, 0.08))
+	for i in range(3):
+		var a2 := TAU * float(i) / 3.0 + PI / 2
+		sw.add_box(Transform3D(Basis(Vector3.UP, -a2 + PI / 2), Vector3(cos(a2) * 0.11, 0, sin(a2) * 0.11)), Vector3(0.22, 0.02, 0.04), Color(0.2, 0.2, 0.2))
+	sw.add_cylinder(Transform3D(Basis(), Vector3.ZERO), 0.06, 0.06, 0.05, 8, GOLD)
+	MeshKit.mesh_instance(spinner, sw.commit())
+	return spinner

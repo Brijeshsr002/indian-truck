@@ -58,6 +58,8 @@ var engine_audio: EngineAudio
 var cockpit_anchor: Node3D
 var steering_spinner: Node3D
 var photo: DashboardPhoto
+## "detailed" (Blender model, TruckVisual) or "simple" (fallback TruckModel).
+var model_kind := ""
 
 var _driven_rpm := 0.0
 var _shift_timer := 0.0
@@ -85,7 +87,11 @@ func _ready() -> void:
 	collision_mask = 1 | 2 | 4
 	_build_collision()
 	_build_wheels()
-	_mats = TruckModel.build(self)
+	_mats = TruckVisual.build(self)
+	model_kind = "detailed"
+	if _mats.is_empty():
+		_mats = TruckModel.build(self)
+		model_kind = "simple"
 	steering_spinner = _mats.get("spinner")
 	_build_lights()
 	_build_audio()
@@ -127,7 +133,14 @@ func _add_wheel(pos: Vector3, steer: bool, drive: bool, dual: bool) -> void:
 	w.use_as_steering = steer
 	w.use_as_traction = drive
 	var mi := MeshInstance3D.new()
-	mi.mesh = TruckModel.wheel_mesh(dual, pos.x > 0.0)
+	var detailed := TruckVisual.wheel_mesh(dual)
+	if detailed:
+		mi.mesh = detailed
+		# The model wheel faces +X; turn it round for the right-hand (-X) side.
+		if pos.x < 0.0:
+			mi.rotation.y = PI
+	else:
+		mi.mesh = TruckModel.wheel_mesh(dual, pos.x > 0.0)
 	w.add_child(mi)
 	add_child(w)
 	all_wheels.append(w)
@@ -140,7 +153,7 @@ func _add_wheel(pos: Vector3, steer: bool, drive: bool, dual: bool) -> void:
 func _build_lights() -> void:
 	for sx: float in [1.0, -1.0]:
 		var l := SpotLight3D.new()
-		l.position = Vector3(0.95 * sx, 0.75, 4.95)
+		l.position = Vector3(0.86 * sx, 0.7, 5.0)
 		l.rotation = Vector3(deg_to_rad(-3), PI, 0)
 		l.spot_range = 75.0
 		l.spot_angle = 30.0
@@ -280,6 +293,9 @@ func _shift_to(g: int) -> void:
 func _apply_drive() -> void:
 	var force := 0.0
 	var can_drive := engine_on and gear != 0 and _shift_timer <= 0.0 and brake_input < 0.05
+	if engine_on and gear == 0 and throttle_input > 0.01 and _hb_warn_cooldown <= 0.0:
+		notify.emit("Gearbox is in neutral (N). Press %s for 1st gear, or %s for the automatic gearbox." % [GameConfig.key_name("gear_up"), GameConfig.key_name("transmission_mode")])
+		_hb_warn_cooldown = 4.0
 	if can_drive and throttle_input > 0.01:
 		if handbrake_on:
 			if _hb_warn_cooldown <= 0.0:

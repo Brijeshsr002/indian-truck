@@ -126,8 +126,11 @@ static func _yard(L: Transform3D, b: MeshBatcher, body: StaticBody3D, root: Node
 	_bx(b, null, L, Vector3(-17, 1.3, -27), Vector3(2.2, 0.2, 1.8), TAMIL_RED, false)
 	_vel(b, L, Vector3(-17, 1.4, -27), 1.0)
 	# parked trucks, spare tyres and diesel drums
-	prop_truck(b, body, L, Vector3(24, 0, -12), 0.0, Color(0.15, 0.35, 0.75), Color(0.85, 0.75, 0.2))
-	prop_truck(b, body, L, Vector3(36, 0, -12), 0.0, Color(0.1, 0.5, 0.3), Color(0.9, 0.5, 0.15))
+	for p in [[Vector3(24, 0, -12), Color(0.15, 0.35, 0.75), Color(0.85, 0.75, 0.2)], [Vector3(36, 0, -12), Color(0.1, 0.5, 0.3), Color(0.9, 0.5, 0.15)]]:
+		if TruckVisual.add_prop(root, L * Transform3D(Basis(), p[0]), p[1]):
+			MeshKit.col_box(body, L * Transform3D(Basis(), p[0] + Vector3(0, 1.5, 0)), Vector3(2.5, 3.0, 10.0))
+		else:
+			prop_truck(b, body, L, p[0], 0.0, p[1], p[2])
 	for i in range(4):
 		b.add_cylinder(L * Transform3D(Basis(), Vector3(-40, 0.15 + i * 0.3, 10)), 0.52, 0.52, 0.28, 10, DARK)
 	for i in range(3):
